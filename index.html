@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a2a8a">
+<title>MELAN</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MELAN">
+<style>
+:root{--bg:#f5f3ee;--c:#fff;--t:#1d2a22;--m:#6b756e;--p:#0a2a8a;--pt:#fff;--b:#d9d6cc;--r:#b42318;--o:#b45309;--g:#15803d}
+@media(prefers-color-scheme:dark){:root{--bg:#121714;--c:#1b221d;--t:#e8eee9;--m:#94a198;--p:#f59e0b;--pt:#1b1200;--b:#2d3830;--r:#f87171;--o:#fbbf24;--g:#4ade80}}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.45 Georgia,"Times New Roman",serif;background:var(--bg);color:var(--t);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+input,select,textarea,button{font:inherit;color:inherit}
+header img{height:30px;width:30px;border-radius:8px;vertical-align:middle;margin-right:8px}.hero{text-align:center;padding:14px 0 4px}.hero img{width:96px;height:96px;border-radius:22px}.hero p{margin:6px 0 0;color:var(--m)}header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--p);color:var(--pt);position:sticky;top:0;z-index:5}
+header a{text-decoration:underline;cursor:pointer}
+nav{display:flex;gap:6px;padding:8px 10px;overflow-x:auto;background:var(--c);border-bottom:1px solid var(--b)}
+nav button{flex:0 0 auto;border:1px solid var(--b);background:none;border-radius:20px;padding:6px 14px}
+nav button.on{background:var(--p);color:var(--pt);border-color:var(--p)}
+main{max-width:720px;margin:0 auto;padding:10px}
+.card{background:var(--c);border:1px solid var(--b);border-radius:10px;padding:12px;margin:0 0 10px}
+.card input,.card select,.card textarea{width:100%;margin:4px 0;padding:9px;border:1px solid var(--b);border-radius:8px;background:var(--bg)}
+textarea{min-height:70px}.ans{min-height:90px;border:1px dashed var(--m);border-radius:6px;padding:8px;white-space:pre-wrap;margin:6px 0}
+button.pri,.card>button{background:var(--p);color:var(--pt);border:0;border-radius:8px;padding:10px 16px;margin-top:6px;width:100%}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}.row input{width:90px!important}
+.m{color:var(--m);font-size:14px}.tag{font-size:13px;border:1px solid var(--b);border-radius:12px;padding:2px 10px}
+.tag.marked{color:var(--g);border-color:var(--g)}
+.bar{display:grid;grid-template-columns:105px 1fr 44px;gap:8px;align-items:center;font-size:14px;margin:4px 0}
+.bar div{height:10px;background:var(--bg);border-radius:5px;overflow:hidden}.bar i{display:block;height:100%}
+.bar em{font-style:normal;text-align:right}
+.g{background:var(--g)}.o{background:var(--o)}.r{background:var(--r)}
+.sheet{position:relative;background:#fff;color:#111;border:1px solid var(--b);padding:16px;border-radius:6px}
+.score{position:absolute;top:12px;right:12px;border:2px solid #b42318;color:#b42318;padding:4px 12px;font-weight:700;border-radius:6px}
+.sheet h2{margin:0 90px 4px 0}.fb{color:#b42318;font-weight:700}.sheet .ans{border-color:#999}
+@media print{header,nav,.np{display:none!important}body{background:#fff}.sheet{border:0}}
+</style></head><body>
+<div id="app"></div>
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const L=['Knowledge','Understanding','Application','Analysis','Evaluation','Creation'];
+const T=['create table if not exists schools(id integer primary key autoincrement,name text,code text unique)',
+'create table if not exists users(id integer primary key autoincrement,school_id int,name text,role text,pin text,class_id int)',
+'create table if not exists subjects(id integer primary key autoincrement,school_id int,name text)',
+'create table if not exists classes(id integer primary key autoincrement,school_id int,name text)',
+'create table if not exists topics(id integer primary key autoincrement,school_id int,subject_id int,class_id int,name text)',
+'create table if not exists subtopics(id integer primary key autoincrement,topic_id int,name text)',
+'create table if not exists competences(id integer primary key autoincrement,topic_id int,name text)',
+'create table if not exists papers(id integer primary key autoincrement,school_id int,teacher_id int,subject_id int,class_id int,title text)',
+'create table if not exists questions(id integer primary key autoincrement,paper_id int,n int,text text,marks real,bloom text,topic_id int,subtopic_id int,competence_id int,guide text)',
+'create table if not exists submissions(id integer primary key autoincrement,paper_id int,learner_id int,status text,total real,comment text)',
+'create table if not exists answers(id integer primary key autoincrement,submission_id int,question_id int,answer text,score real,comment text)'];
+let U=JSON.parse(localStorage.getItem('u')||'null'),V='cur',C={};
+const cfg=()=>JSON.parse(localStorage.getItem('cfg')||'null');
+async function db(sql,a=[]){const c=cfg();
+ const args=a.map(v=>v==null?{type:'null'}:typeof v==='number'?(Number.isInteger(v)?{type:'integer',value:String(v)}:{type:'float',value:v}):{type:'text',value:String(v)});
+ const r=await fetch(c.url+'/v2/pipeline',{method:'POST',headers:{Authorization:'Bearer '+c.token,'Content-Type':'application/json'},body:JSON.stringify({requests:[{type:'execute',stmt:{sql,args}},{type:'close'}]})});
+ const j=await r.json(),x=j.results&&j.results[0];if(!x||x.type==='error')throw new Error(x?x.error.message:'Database error');
+ const q=x.response.result;return q.rows.map(w=>Object.fromEntries(q.cols.map((c,i)=>[c.name,w[i].value])))}
+const ins=async(s,a)=>Number((await db(s,a))[0].id);
+const hash=async s=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))].map(b=>b.toString(16).padStart(2,'0')).join('');
+const opts=(r,k='name')=>r.map(x=>`<option value="${x.id}">${esc(x[k])}</option>`).join('');
+const val=id=>$('#'+id).value.trim();
+const safe=f=>async(...a)=>{try{await f(...a)}catch(e){alert(e.message)}};
+
+/* ---------- setup & auth ---------- */
+function setup(){const c=cfg()||{};$('#app').innerHTML=`<main><div class=hero><img src=logo-96.png alt=MELAN></div><div class=card><h3>Turso database</h3><p class=m>Paste your database URL and an access token.</p><input id=du placeholder="libsql://your-db.turso.io" value="${esc(c.url||'')}"><input id=dt placeholder="Auth token" value="${esc(c.token||'')}"><button onclick="saveCfg()">Save and prepare tables</button></div></main>`}
+const saveCfg=safe(async()=>{localStorage.setItem('cfg',JSON.stringify({url:val('du').replace('libsql://','https://'),token:val('dt')}));for(const s of T)await db(s);auth()});
+function auth(){$('#app').innerHTML=`<main><div class=hero><img src=logo-96.png alt=MELAN><p>Learn. Practice. Grow.</p></div><div class=card><h3>Sign in</h3><input id=sc placeholder="School code"><input id=nm placeholder="Your name"><input id=pn type=password placeholder="PIN"><button onclick="login()">Sign in</button></div>
+<div class=card><h3>Create a school</h3><input id=ns placeholder="School name"><input id=tn placeholder="Your name"><input id=tp type=password placeholder="PIN"><button onclick="regSchool()">Create school</button></div>
+<div class=card><h3>Join a school</h3><input id=js placeholder="School code"><input id=jn placeholder="Full name"><input id=jp type=password placeholder="PIN"><select id=jr><option value=teacher>Teacher</option><option value=learner>Learner</option></select><input id=jc placeholder="Class name (learners only)"><button onclick="join()">Join</button></div>
+<p class=m><a href="#" onclick="setup();return false">Database settings</a></p></main>`}
+function start(u){U=u;localStorage.setItem('u',JSON.stringify(u));shell()}
+const login=safe(async()=>{const r=await db('select u.*,s.name sn from users u join schools s on s.id=u.school_id where s.code=? and lower(u.name)=lower(?) and u.pin=?',[val('sc').toUpperCase(),val('nm'),await hash(val('pn'))]);
+ if(!r[0])throw new Error('School code, name or PIN is wrong');const u=r[0];start({id:+u.id,sid:+u.school_id,name:u.name,role:u.role,cid:u.class_id?+u.class_id:null,sn:u.sn})});
+const regSchool=safe(async()=>{if(!val('ns')||!val('tn')||!val('tp'))throw new Error('Fill every field');
+ const code=Math.random().toString(36).slice(2,7).toUpperCase(),sid=await ins('insert into schools(name,code) values(?,?) returning id',[val('ns'),code]);
+ const id=await ins('insert into users(school_id,name,role,pin) values(?,?,?,?) returning id',[sid,val('tn'),'teacher',await hash(val('tp'))]);
+ alert('Your school code is '+code+'. Share it with teachers and learners.');start({id,sid,name:val('tn'),role:'teacher',sn:val('ns')})});
+const join=safe(async()=>{const s=(await db('select * from schools where code=?',[val('js').toUpperCase()]))[0];if(!s)throw new Error('School code not found');
+ if(!val('jn')||!val('jp'))throw new Error('Fill name and PIN');let cid=null;
+ if(val('jr')==='learner'){const c=(await db('select id from classes where school_id=? and lower(name)=lower(?)',[s.id,val('jc')]))[0];if(!c)throw new Error('Class not found. Ask your teacher for the exact class name');cid=+c.id}
+ const id=await ins('insert into users(school_id,name,role,pin,class_id) values(?,?,?,?,?) returning id',[s.id,val('jn'),val('jr'),await hash(val('jp')),cid]);
+ start({id,sid:+s.id,name:val('jn'),role:val('jr'),cid,sn:s.name})});
+const out=()=>{localStorage.removeItem('u');U=null;auth()};
+
+/* ---------- shell ---------- */
+function shell(){const t=U.role==='teacher';
+ $('#app').innerHTML=`<header><b><img src=logo-96.png alt=MELAN>${esc(U.sn)}</b><span>${esc(U.name)} · <a onclick="out()">Log out</a></span></header>`+
+ (t?`<nav>${[['cur','Curriculum'],['papers','Papers'],['mark','Marking'],['ins','Insights']].map(x=>`<button id=n-${x[0]} onclick="nav('${x[0]}')">${x[1]}</button>`).join('')}</nav>`:'')+'<main id=v></main>';
+ t?nav('cur'):lHome()}
+const views={cur:()=>vCur(),papers:()=>vPapers(),mark:()=>vMark(),ins:()=>vIns()};
+function nav(v){V=v;$$('nav button').forEach(b=>b.classList.toggle('on',b.id==='n-'+v));safe(views[v])()}
+const add=safe(async(sql,ids,pre=[])=>{const a=ids.map(val);if(a.some(x=>!x))throw new Error('Fill every field');await db(sql,pre.concat(a));nav(V)});
+
+/* ---------- curriculum ---------- */
+async function vCur(){const s=[U.sid];
+ const [sub,cl,tp,st,cp]=await Promise.all([db('select * from subjects where school_id=?',s),db('select * from classes where school_id=?',s),
+ db('select t.*,(select name from subjects where id=t.subject_id) sn,(select name from classes where id=t.class_id) cn from topics t where school_id=?',s),
+ db('select * from subtopics where topic_id in (select id from topics where school_id=?)',s),db('select * from competences where topic_id in (select id from topics where school_id=?)',s)]);
+ const f=(t,rows)=>rows.filter(x=>x.topic_id==t).map(x=>esc(x.name)).join('; ')||'none yet';
+ $('#v').innerHTML=`<div class=card><b>Subjects</b> <span class=m>${sub.map(x=>esc(x.name)).join(', ')}</span><input id=a1 placeholder="New subject"><button onclick="add('insert into subjects(school_id,name) values(?,?)',['a1'],[${U.sid}])">Add subject</button></div>
+ <div class=card><b>Classes</b> <span class=m>${cl.map(x=>esc(x.name)).join(', ')}</span><input id=a2 placeholder="New class, for example P5"><button onclick="add('insert into classes(school_id,name) values(?,?)',['a2'],[${U.sid}])">Add class</button></div>
+ <div class=card><b>Topic</b><select id=a3>${opts(sub)}</select><select id=a4>${opts(cl)}</select><input id=a5 placeholder="Topic name"><button onclick="add('insert into topics(school_id,subject_id,class_id,name) values(?,?,?,?)',['a3','a4','a5'],[${U.sid}])">Add topic</button></div>
+ <div class=card><b>Subtopic</b><select id=a6>${opts(tp)}</select><input id=a7 placeholder="Subtopic name"><button onclick="add('insert into subtopics(topic_id,name) values(?,?)',['a6','a7'])">Add subtopic</button>
+ <hr><b>Competence</b><select id=a8>${opts(tp)}</select><input id=a9 placeholder="Competence, for example: learner can save a file"><button onclick="add('insert into competences(topic_id,name) values(?,?)',['a8','a9'])">Add competence</button></div>`+
+ tp.map(t=>`<div class=card><b>${esc(t.name)}</b> <span class=m>${esc(t.sn)}, ${esc(t.cn)}</span><br><span class=m>Subtopics: ${f(t.id,st)}</span><br><span class=m>Competences: ${f(t.id,cp)}</span></div>`).join('')}
+
+/* ---------- papers ---------- */
+async function vPapers(){const r=await db('select p.*,(select count(*) from questions where paper_id=p.id) n,(select count(*) from submissions where paper_id=p.id) s from papers p where school_id=? order by id desc',[U.sid]);
+ $('#v').innerHTML=`<button class=pri onclick="newPaper()">Set a new paper</button><br><br>`+(r.map(p=>`<div class="card row"><b>${esc(p.title)}</b><span class=m>${p.n} questions, ${p.s} submitted</span></div>`).join('')||'<p class=m>No papers yet.</p>')}
+const newPaper=safe(async()=>{const [sub,cl]=await Promise.all([db('select * from subjects where school_id=?',[U.sid]),db('select * from classes where school_id=?',[U.sid])]);
+ $('#v').innerHTML=`<div class=card><h3>New paper</h3><input id=pt placeholder="Paper title"><select id=ps>${opts(sub)}</select><select id=pc>${opts(cl)}</select><p class=m>How many questions at each Bloom level?</p>${L.map((l,i)=>`<label class=row>${l}<input type=number min=0 value=0 id=n${i}></label>`).join('')}<button onclick="buildQ()">Next</button></div>`});
+const buildQ=safe(async()=>{const m={t:val('pt'),s:val('ps'),c:val('pc')};if(!m.t||!m.s||!m.c)throw new Error('Add a title, subject and class');
+ const n=L.map((_,i)=>+val('n'+i)||0);if(!n.some(x=>x))throw new Error('Enter how many questions you want');
+ const [tp,st,cp]=await Promise.all([db('select * from topics where school_id=? and subject_id=? and class_id=?',[U.sid,m.s,m.c]),
+ db('select * from subtopics where topic_id in (select id from topics where school_id=?)',[U.sid]),db('select * from competences where topic_id in (select id from topics where school_id=?)',[U.sid])]);
+ if(!tp.length)throw new Error('Add topics for this subject and class first');C={m,tp,st,cp};let k=0;
+ $('#v').innerHTML=`<p class=m>${esc(m.t)}</p>`+n.map((c,i)=>Array.from({length:c},()=>{k++;return `<div class="card qc" data-b="${L[i]}"><b>Question ${k}</b> <span class=m>${L[i]}</span>
+ <textarea class=qt placeholder="Write the question"></textarea><input class=qm type=number min=1 value=5 placeholder="Marks"><select class=qtp onchange="fillSub(this)">${opts(tp)}</select><select class=qst></select><select class=qcp></select>
+ <textarea class=qg placeholder="Marking guide (optional)"></textarea></div>`}).join('')).join('')+`<button class=pri onclick="savePaper()">Save paper</button>`;
+ $$('.qtp').forEach(fillSub)});
+function fillSub(e){const c=e.closest('.qc'),t=e.value;
+ c.querySelector('.qst').innerHTML='<option value="">Subtopic (optional)</option>'+opts(C.st.filter(x=>x.topic_id==t));
+ c.querySelector('.qcp').innerHTML='<option value="">Competence (optional)</option>'+opts(C.cp.filter(x=>x.topic_id==t))}
+const savePaper=safe(async()=>{const cs=$$('.qc');if(cs.some(c=>!c.querySelector('.qt').value.trim()))throw new Error('Write every question');
+ const p=await ins('insert into papers(school_id,teacher_id,subject_id,class_id,title) values(?,?,?,?,?) returning id',[U.sid,U.id,C.m.s,C.m.c,C.m.t]);
+ for(const [i,c] of cs.entries()){const g=k=>c.querySelector(k).value;
+  await db('insert into questions(paper_id,n,text,marks,bloom,topic_id,subtopic_id,competence_id,guide) values(?,?,?,?,?,?,?,?,?)',[p,i+1,g('.qt'),+g('.qm')||1,c.dataset.b,g('.qtp'),g('.qst')||null,g('.qcp')||null,g('.qg')])}
+ nav('papers')});
+
+/* ---------- marking ---------- */
+const vMark=async()=>{const r=await db('select s.id,s.status,u.name,p.title from submissions s join users u on u.id=s.learner_id join papers p on p.id=s.paper_id where p.school_id=? order by s.id desc',[U.sid]);
+ $('#v').innerHTML=r.map(x=>`<div class="card row" onclick="openSub(${x.id})"><span><b>${esc(x.name)}</b><br><span class=m>${esc(x.title)}</span></span><span class="tag ${x.status}">${x.status}</span></div>`).join('')||'<p class=m>No submissions yet.</p>'};
+const openSub=safe(async id=>{const h=(await db('select s.*,u.name,p.title from submissions s join users u on u.id=s.learner_id join papers p on p.id=s.paper_id where s.id=?',[id]))[0];
+ const q=await db('select a.id aid,a.answer,a.score,a.comment cm,q.* from answers a join questions q on q.id=a.question_id where a.submission_id=? order by q.n',[id]);window.SID=id;
+ $('#v').innerHTML=`<div class=card><b>${esc(h.name)}</b>, ${esc(h.title)}<label class=row>Show marking guide<input type=checkbox checked onchange="$$('.gd').forEach(e=>e.hidden=!this.checked)"></label></div>`+
+ q.map(x=>`<div class=card data-a=${x.aid} data-m=${x.marks}><b>Q${x.n}</b> <span class=m>${x.bloom}, ${x.marks} marks</span><p>${esc(x.text)}</p><div class=ans>${esc(x.answer)||'No answer'}</div>
+ ${x.guide?`<div class="gd m">Guide: ${esc(x.guide)}</div>`:''}<div class=row><span>Score out of ${x.marks}</span><input class=sc type=number step=0.5 min=0 max=${x.marks} value="${x.score??''}"></div><input class=cmt placeholder="Comment" value="${esc(x.cm)}"></div>`).join('')+
+ `<div class=card><input id=oc placeholder="Overall comment" value="${esc(h.comment)}"><button onclick="saveMarks()">Save marks</button></div>`});
+const saveMarks=safe(async()=>{let tot=0;for(const c of $$('[data-a]')){const m=+c.dataset.m,s=Math.min(m,Math.max(0,+c.querySelector('.sc').value||0));tot+=s;
+ await db('update answers set score=?,comment=? where id=?',[s,c.querySelector('.cmt').value,c.dataset.a])}
+ await db("update submissions set status='marked',total=?,comment=? where id=?",[tot,$('#oc').value,window.SID]);nav('mark')});
+
+/* ---------- insights ---------- */
+const bars=b=>L.map(l=>{const v=b[l];if(!v||!v[1])return `<div class=bar><span>${l}</span><div></div><em>-</em></div>`;const p=Math.round(v[0]/v[1]*100);
+ return `<div class=bar><span>${l}</span><div><i class="${p>=70?'g':p>=50?'o':'r'}" style="width:${p}%"></i></div><em>${p}%</em></div>`}).join('');
+const cov=async(sql,label)=>{const r=await db(sql,[U.sid]);if(!r.length)return '';const avg=r.reduce((a,x)=>a+ +x.n,0)/r.length;
+ const no=r.filter(x=>+x.n===0),ov=r.filter(x=>+x.n>=4&&+x.n>2*avg);
+ return `<div class=card><b>${label}</b><br>${ov.length?`<span style="color:var(--o)">Over-set: ${ov.map(x=>esc(x.name)+' ('+x.n+')').join(', ')}</span><br>`:''}${no.length?`<span style="color:var(--r)">Ignored: ${no.map(x=>esc(x.name)).join(', ')}</span>`:''}${!ov.length&&!no.length?'<span class=m>Balanced so far</span>':''}</div>`};
+const vIns=async()=>{const r=await db("select u.id uid,u.name,q.bloom,sum(a.score) s,sum(q.marks) m from answers a join questions q on q.id=a.question_id join submissions s on s.id=a.submission_id join users u on u.id=s.learner_id where s.status='marked' and u.school_id=? group by u.id,q.bloom",[U.sid]);
+ const by={},tot={};r.forEach(x=>{(by[x.uid]??={n:x.name,b:{}}).b[x.bloom]=[+x.s,+x.m];const t=tot[x.bloom]??=[0,0];t[0]+=+x.s;t[1]+=+x.m});
+ const note=b=>{const a=L.filter(l=>b[l]&&b[l][1]).map(l=>[l,b[l][0]/b[l][1]]).sort((x,y)=>y[1]-x[1]);return a.length>1?`<p class=m>Strongest: ${a[0][0]}. Weakest: ${a[a.length-1][0]}.</p>`:''};
+ $('#v').innerHTML=`<div class=card><b>Whole school, marked work</b>${bars(tot)}${note(tot)}</div>`+Object.values(by).map(u=>`<div class=card><b>${esc(u.n)}</b>${bars(u.b)}${note(u.b)}</div>`).join('')+
+ '<h3>Coverage of questions set</h3>'+await cov('select t.name,(select count(*) from questions q where q.topic_id=t.id) n from topics t where t.school_id=?','Topics')+
+ await cov('select s.name,(select count(*) from questions q where q.subtopic_id=s.id) n from subtopics s where s.topic_id in (select id from topics where school_id=?)','Subtopics')+
+ await cov('select c.name,(select count(*) from questions q where q.competence_id=c.id) n from competences c where c.topic_id in (select id from topics where school_id=?)','Competences')+
+ await cov('select c.name,(select count(*) from questions q join papers p on p.id=q.paper_id where p.class_id=c.id) n from classes c where c.school_id=?','Classes')};
+
+/* ---------- learner ---------- */
+const lHome=safe(async()=>{const r=await db('select p.id,p.title,s.id sid,s.status from papers p left join submissions s on s.paper_id=p.id and s.learner_id=? where p.class_id=? order by p.id desc',[U.id,U.cid]);
+ $('#v').innerHTML=r.map(p=>`<div class="card row" onclick="lOpen(${p.id},${p.sid||0},'${p.status||''}')"><b>${esc(p.title)}</b><span class="tag ${p.status||''}">${p.status||'to do'}</span></div>`).join('')||'<p class=m>No papers for your class yet.</p>'});
+const lOpen=safe(async(pid,sid,st)=>{if(st==='marked')return showMarked(sid);if(st)return alert('Your teacher has not marked this paper yet');
+ const q=await db('select * from questions where paper_id=? order by n',[pid]);window.PID=pid;
+ $('#v').innerHTML=q.map(x=>`<div class=card data-q=${x.id}><b>Q${x.n}</b> <span class=m>${x.marks} marks</span><p>${esc(x.text)}</p><textarea class=an style="min-height:110px" placeholder="Write your answer here"></textarea></div>`).join('')+`<button class=pri onclick="submitP()">Submit paper</button>`});
+const submitP=safe(async()=>{if(!confirm('Submit your answers? You cannot change them after.'))return;
+ const s=await ins("insert into submissions(paper_id,learner_id,status) values(?,?,'submitted') returning id",[window.PID,U.id]);
+ for(const c of $$('[data-q]'))await db('insert into answers(submission_id,question_id,answer) values(?,?,?)',[s,c.dataset.q,c.querySelector('.an').value]);lHome()});
+const showMarked=safe(async sid=>{const h=(await db('select s.*,u.name,p.title from submissions s join users u on u.id=s.learner_id join papers p on p.id=s.paper_id where s.id=?',[sid]))[0];
+ const q=await db('select a.answer,a.score,a.comment cm,q.n,q.text,q.marks from answers a join questions q on q.id=a.question_id where a.submission_id=? order by q.n',[sid]);
+ const max=q.reduce((a,x)=>a+ +x.marks,0);
+ $('#v').innerHTML=`<div class=sheet><div class=score>${+h.total}/${max}</div><h2>${esc(h.title)}</h2><p>${esc(h.name)}</p>`+
+ q.map(x=>`<div><b>${x.n}.</b> ${esc(x.text)} <i>[${x.marks}]</i><div class=ans>${esc(x.answer)||'No answer'}</div><div class=fb>${+x.score}/${x.marks}${x.cm?' · '+esc(x.cm):''}</div></div><br>`).join('')+
+ `<p class=fb>Teacher comment: ${esc(h.comment)||'None'}</p></div><button class="pri np" style="margin-top:10px" onclick="print()">Download as PDF</button><button class="np" style="margin-top:8px;width:100%;background:none;border:1px solid var(--b);border-radius:8px;padding:10px" onclick="lHome()">Back</button>`});
+
+/* ---------- boot ---------- */
+!cfg()?setup():U?shell():auth();
+</script></body></html>
